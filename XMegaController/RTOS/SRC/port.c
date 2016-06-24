@@ -101,6 +101,10 @@ Changes from V2.6.0
 any details of its type. */
 typedef void TCB_t;
 extern volatile TCB_t * volatile pxCurrentTCB;
+/* actual number of ticks per second from the RTC Timer 32,768Hz, after configuration. */
+static TickType_t portTickRateHz;
+/* remaining ticks in each second, decremented to enable the system_tick. */
+static TickType_t ticksRemainingInSec;
 
 /*-----------------------------------------------------------*/
 
@@ -120,7 +124,71 @@ extern volatile TCB_t * volatile pxCurrentTCB;
  * so we need not worry about reading/writing to the stack pointer. 
  */
 
-#define portSAVE_CONTEXT()									\
+/* 
+ * The return address can be two or three bytes, depending on program memory size of the device. For devices 
+ * with 128KB or less of program memory, the return address is two bytes, and hence the SP is decremented or 
+ * incremented by two. For devices with more than 128KB of program memory, the return address is three bytes, 
+ * and hence the SP is decremented or incremented by three.
+ */
+#if defined(__AVR_ATxmega128A1U__)
+/* devices with more than 64KB of program memory (3 byte PC Save) */
+ #define portSAVE_CONTEXT()									\
+	asm volatile (	"push	r0						\n\t"	\
+					"in		r0, __SREG__			\n\t"	\
+					"cli							\n\t"	\
+					"push	r0						\n\t"	\
+					"in		r0,	0x38				\n\t"	\
+					"push	r0						\n\t"	\
+					"in		r0,	0x39				\n\t"	\
+					"push	r0						\n\t"	\
+					"in		r0,	0x3a				\n\t"	\
+					"push	r0						\n\t"	\
+					"in		r0,	0x3b				\n\t"	\
+					"push	r0						\n\t"	\
+					"in		r0,	0x3c				\n\t"	\
+					"push	r0						\n\t"	\
+					"push	r1						\n\t"	\
+					"clr	r1						\n\t"	\
+					"push	r2						\n\t"	\
+					"push	r3						\n\t"	\
+					"push	r4						\n\t"	\
+					"push	r5						\n\t"	\
+					"push	r6						\n\t"	\
+					"push	r7						\n\t"	\
+					"push	r8						\n\t"	\
+					"push	r9						\n\t"	\
+					"push	r10						\n\t"	\
+					"push	r11						\n\t"	\
+					"push	r12						\n\t"	\
+					"push	r13						\n\t"	\
+					"push	r14						\n\t"	\
+					"push	r15						\n\t"	\
+					"push	r16						\n\t"	\
+					"push	r17						\n\t"	\
+					"push	r18						\n\t"	\
+					"push	r19						\n\t"	\
+					"push	r20						\n\t"	\
+					"push	r21						\n\t"	\
+					"push	r22						\n\t"	\
+					"push	r23						\n\t"	\
+					"push	r24						\n\t"	\
+					"push	r25						\n\t"	\
+					"push	r26						\n\t"	\
+					"push	r27						\n\t"	\
+					"push	r28						\n\t"	\
+					"push	r29						\n\t"	\
+					"push	r30						\n\t"	\
+					"push	r31						\n\t"	\
+					"lds	r26, pxCurrentTCB		\n\t"	\
+					"lds	r27, pxCurrentTCB + 1	\n\t"	\
+					"in		r0, 0x3d				\n\t"	\
+					"st		x+, r0					\n\t"	\
+					"in		r0, 0x3e				\n\t"	\
+					"st		x+, r0					\n\t"	\
+				);
+#elif defined(__AVR_ATmega323__)
+/* devices with less than 128KB of program memory (2 byte PC Save) */
+ #define portSAVE_CONTEXT()									\
 	asm volatile (	"push	r0						\n\t"	\
 					"in		r0, __SREG__			\n\t"	\
 					"cli							\n\t"	\
@@ -164,13 +232,68 @@ extern volatile TCB_t * volatile pxCurrentTCB;
 					"in		r0, 0x3e				\n\t"	\
 					"st		x+, r0					\n\t"	\
 				);
-
+#endif
 /* 
  * Opposite to portSAVE_CONTEXT().  Interrupts will have been disabled during
  * the context save so we can write to the stack pointer. 
  */
-
-#define portRESTORE_CONTEXT()								\
+#if defined(__AVR_ATxmega128A1U__)
+/* devices with more than 64KB of program memory (3 byte PC Save) */ 
+ #define portRESTORE_CONTEXT()								\
+	asm volatile (	"lds	r26, pxCurrentTCB		\n\t"	\
+					"lds	r27, pxCurrentTCB + 1	\n\t"	\
+					"ld		r28, x+					\n\t"	\
+					"out	__SP_L__, r28			\n\t"	\
+					"ld		r29, x+					\n\t"	\
+					"out	__SP_H__, r29			\n\t"	\
+					"pop	r31						\n\t"	\
+					"pop	r30						\n\t"	\
+					"pop	r29						\n\t"	\
+					"pop	r28						\n\t"	\
+					"pop	r27						\n\t"	\
+					"pop	r26						\n\t"	\
+					"pop	r25						\n\t"	\
+					"pop	r24						\n\t"	\
+					"pop	r23						\n\t"	\
+					"pop	r22						\n\t"	\
+					"pop	r21						\n\t"	\
+					"pop	r20						\n\t"	\
+					"pop	r19						\n\t"	\
+					"pop	r18						\n\t"	\
+					"pop	r17						\n\t"	\
+					"pop	r16						\n\t"	\
+					"pop	r15						\n\t"	\
+					"pop	r14						\n\t"	\
+					"pop	r13						\n\t"	\
+					"pop	r12						\n\t"	\
+					"pop	r11						\n\t"	\
+					"pop	r10						\n\t"	\
+					"pop	r9						\n\t"	\
+					"pop	r8						\n\t"	\
+					"pop	r7						\n\t"	\
+					"pop	r6						\n\t"	\
+					"pop	r5						\n\t"	\
+					"pop	r4						\n\t"	\
+					"pop	r3						\n\t"	\
+					"pop	r2						\n\t"	\
+					"pop	r1						\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	0x3c, r0				\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	0x3b, r0				\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	0x3a, r0				\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	0x39, r0				\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	0x38, r0				\n\t"	\
+					"pop	r0						\n\t"	\
+					"out	__SREG__, r0			\n\t"	\
+					"pop	r0						\n\t"	\
+				);
+#elif defined(__AVR_ATmega323__)
+/* devices with less than 128KB of program memory (2 byte PC Save) */ 
+ #define portRESTORE_CONTEXT()								\
 	asm volatile (	"lds	r26, pxCurrentTCB		\n\t"	\
 					"lds	r27, pxCurrentTCB + 1	\n\t"	\
 					"ld		r28, x+					\n\t"	\
@@ -212,7 +335,7 @@ extern volatile TCB_t * volatile pxCurrentTCB;
 					"out	__SREG__, r0			\n\t"	\
 					"pop	r0						\n\t"	\
 				);
-
+#endif
 /*-----------------------------------------------------------*/
 
 /*
@@ -245,6 +368,21 @@ uint16_t usAddress;
 
 	/* The start of the task code will be popped off the stack last, so place
 	it on first. */
+
+#if defined(__AVR_ATxmega128A1U__)	
+
+/* 
+ * The return address can be two or three bytes, depending on program memory size of the device. For devices 
+ * with 128KB or less of program memory, the return address is two bytes, and hence the SP is decremented or 
+ * incremented by two. For devices with more than 128KB of program memory, the return address is three bytes, 
+ * and hence the SP is decremented or incremented by three.
+ 	 
+ * Store 0 as the top byte since we force all task routines to the bottom 128K
+ * of flash. We do this by using the .lowtext label in the linker script.
+ *
+ * In order to do this properly, we would need to get a full 3-byte pointer to
+ * pxCode.
+ */
 	usAddress = ( uint16_t ) pxCode;
 	*pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
 	pxTopOfStack--;
@@ -252,6 +390,21 @@ uint16_t usAddress;
 	usAddress >>= 8;
 	*pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
 	pxTopOfStack--;
+
+	*pxTopOfStack = 0;
+	pxTopOfStack--;
+
+#elif defined(__AVR_ATmega323__)
+
+	usAddress = ( uint16_t ) pxCode;
+	*pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
+	pxTopOfStack--;
+
+	usAddress >>= 8;
+	*pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
+	pxTopOfStack--;
+
+#endif
 
 	/* Next simulate the stack as if after a call to portSAVE_CONTEXT().  
 	portSAVE_CONTEXT places the flags on the stack immediately after r0
@@ -262,8 +415,24 @@ uint16_t usAddress;
 	*pxTopOfStack = portFLAGS_INT_ENABLED;
 	pxTopOfStack--;
 
+#if defined(__AVR_ATxmega128A1U__)	
 
+	/* If we have an ATxmega1281U, we are also saving the RAMPD, RAMPX, RAMPY, RAMPZ, and EIND registers.
+	 * We should default those to 0.
+	 */
+	 *pxTopOfStack = ( StackType_t ) 0x00;	/* RAMPD */
+	 pxTopOfStack--;
+	 *pxTopOfStack = ( StackType_t ) 0x00;	/* RAMPX */
+	 pxTopOfStack--;
+	 *pxTopOfStack = ( StackType_t ) 0x00;	/* RAMPY */
+	 pxTopOfStack--;
+	 *pxTopOfStack = ( StackType_t ) 0x00;	/* RAMPZ */
+	 pxTopOfStack--;
+	 *pxTopOfStack = ( StackType_t ) 0x00;	/* EIND */
+	 pxTopOfStack--;
+#endif
 	/* Now the remaining registers.   The compiler expects R1 to be 0. */
+	
 	*pxTopOfStack = ( StackType_t ) 0x00;	/* R1 */
 	pxTopOfStack--;
 	*pxTopOfStack = ( StackType_t ) 0x02;	/* R2 */
@@ -404,38 +573,60 @@ void vPortYieldFromTick( void )
 static void prvSetupTimerInterrupt( void )
 {
 #if defined (__AVR_ATxmega128A1U__)
-#elif defined (__AVR_ATmega323__)
-uint32_t ulCompareMatch;
-uint8_t ucHighByte, ucLowByte;
+	uint16_t usCompareMatch;
 
-	/* Using 16bit timer 1 to generate the tick.  Correct fuses must be
-	selected for the configCPU_CLOCK_HZ clock. */
+	/* Using 8bit Timer2 to generate the tick.  A 32.768 KHz crystal
+	 * must be attached to the appropriate pins.  We then adjust the number
+	 * to a power of two so we can get EXACT seconds for the Real Time clock.
+	 */
 
-	ulCompareMatch = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+	usCompareMatch = (uint16_t) ((uint32_t) 32768) / configTICK_RATE_HZ;
 
-	/* We only have 16 bits so have to scale to get our required tick rate. */
-	ulCompareMatch /= portCLOCK_PRESCALER;
+	if ( usCompareMatch > 192 )
+	{
+		usCompareMatch = 256;
+	}
+	else
+	{
+		for (uint8_t i = 7; i >= 1; --i)
+		{
+			if ( usCompareMatch & ((uint16_t)1 << i) )
+			{
+				/* found the power - now let's see if we round up or down */
+				if ( usCompareMatch & ((uint16_t)1 << (i-1)) )
+				{
+					usCompareMatch = ((uint16_t)1 << (i+1));
+				}
+				else
+				{
+					usCompareMatch = ((uint16_t)1 << i);
+				}
+				break;
+			}
+		}
+	}
+
+	/* actual port tick rate in Hz, calculated */
+	portTickRateHz = (TickType_t) ((uint32_t) 32768 / usCompareMatch );
+	/* initialise first second of ticks */
+	ticksRemainingInSec = portTickRateHz;
 
 	/* Adjust for correct value. */
-	ulCompareMatch -= ( uint32_t ) 1;
+	usCompareMatch -= ( uint16_t ) 1;
 
-	/* Setup compare match value for compare match A.  Interrupts are disabled 
-	before this is called so we need not worry here. */
-	ucLowByte = ( uint8_t ) ( ulCompareMatch & ( uint32_t ) 0xff );
-	ulCompareMatch >>= 8;
-	ucHighByte = ( uint8_t ) ( ulCompareMatch & ( uint32_t ) 0xff );
-	OCR1AH = ucHighByte;
-	OCR1AL = ucLowByte;
+	portTIMSK &= ~( _BV(OCIE2B)|_BV(OCIE2A)|_BV(TOIE2) );	// disable all Timer2 interrupts
+	portTIFR |=  _BV(OCF2B)|_BV(OCF2A)|_BV(TOV2);			// clear all pending interrupts
+    ASSR = _BV(AS2);              							// set Timer/Counter2 to be asynchronous from the CPU clock
+                                  	  	  	  	  	  		// with a second external clock (32,768kHz) driving it.
+    portTCNT  = 0x00;				  						// zero out the counter
+    portTCCRa = _BV(WGM21);									// mode CTC (clear on counter match)
+	portTCCRb = _BV(CS20);									// divide system clock by 1
+	portOCRL  = usCompareMatch;								// set the counter
 
-	/* Setup clock source and compare match behaviour. */
-	ucLowByte = portCLEAR_COUNTER_ON_MATCH | portPRESCALE_64;
-	TCCR1B = ucLowByte;
+    while( ASSR & (_BV(TCN2UB)|_BV(OCR2AUB)|_BV(TCR2AUB))); // Wait until Timer2 update complete
 
-	/* Enable the interrupt - this is okay as interrupt are currently globally
-	disabled. */
-	ucLowByte = TIMSK;
-	ucLowByte |= portCOMPARE_MATCH_A_INTERRUPT_ENABLE;
-	TIMSK = ucLowByte;
+    portTIMSK |= _BV(OCIE2A);								// interrupt on Timer2 compare match
+
 #endif
 }
 /*-----------------------------------------------------------*/

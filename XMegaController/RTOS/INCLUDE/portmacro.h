@@ -137,8 +137,13 @@ extern void vPortYield( void ) __attribute__ ( ( naked ) );
 #define portYIELD()					vPortYield()
 /*-----------------------------------------------------------*/
 
+#if defined(__AVR_ATxmega128A1U__)
 /* Task function macros as described on the FreeRTOS.org WEB site. */
-#define portTASK_FUNCTION_PROTO( vFunction, pvParameters ) void vFunction( void *pvParameters )
+// This changed to add .lowtext tag for the linker for ATmega2560 and ATmega2561. To make sure they are loaded in low memory.
+	#define portTASK_FUNCTION_PROTO( vFunction, pvParameters ) void vFunction( void *pvParameters ) __attribute__ ((section (".lowtext")))
+#else
+	#define portTASK_FUNCTION_PROTO( vFunction, pvParameters ) void vFunction( void *pvParameters )
+#endif
 #define portTASK_FUNCTION( vFunction, pvParameters ) void vFunction( void *pvParameters )
 
 #ifdef __cplusplus
