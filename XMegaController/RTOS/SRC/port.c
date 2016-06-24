@@ -403,6 +403,8 @@ void vPortYieldFromTick( void )
  */
 static void prvSetupTimerInterrupt( void )
 {
+#if defined (__AVR_ATxmega128A1U__)
+#elif defined (__AVR_ATmega323__)
 uint32_t ulCompareMatch;
 uint8_t ucHighByte, ucLowByte;
 
@@ -434,34 +436,39 @@ uint8_t ucHighByte, ucLowByte;
 	ucLowByte = TIMSK;
 	ucLowByte |= portCOMPARE_MATCH_A_INTERRUPT_ENABLE;
 	TIMSK = ucLowByte;
+#endif
 }
 /*-----------------------------------------------------------*/
 
 #if configUSE_PREEMPTION == 1
-
 	/*
 	 * Tick ISR for preemptive scheduler.  We can use a naked attribute as
 	 * the context is saved at the start of vPortYieldFromTick().  The tick
 	 * count is incremented after the context is saved.
 	 */
+#if defined (__AVR_ATxmega128A1U__)
+#elif defined (__AVR_ATmega323__)
 	void SIG_OUTPUT_COMPARE1A( void ) __attribute__ ( ( signal, naked ) );
 	void SIG_OUTPUT_COMPARE1A( void )
 	{
 		vPortYieldFromTick();
 		asm volatile ( "reti" );
 	}
+#endif
 #else
-
 	/*
 	 * Tick ISR for the cooperative scheduler.  All this does is increment the
 	 * tick count.  We don't need to switch context, this can only be done by
 	 * manual calls to taskYIELD();
 	 */
+#if defined (__AVR_ATxmega128A1U__)
+#elif defined (__AVR_ATmega323__)
 	void SIG_OUTPUT_COMPARE1A( void ) __attribute__ ( ( signal ) );
 	void SIG_OUTPUT_COMPARE1A( void )
 	{
 		xTaskIncrementTick();
 	}
+#endif
 #endif
 
 
