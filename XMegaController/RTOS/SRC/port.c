@@ -619,16 +619,17 @@ static void prvSetupTimerInterrupt( void )
     CLK.RTCCTRL |= (CLK_RTCSRC_RCOSC32_gc);              				// set RTC clock source
                                   	  	  	  	  	  					// with internal clock (32,768kHz) driving it.
     
-	while(!(RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
-    RTC.CNT = 0x00;														// zero out the counter
-	portTCCRa = _BV(WGM21);												// mode CTC (clear on counter match)
-	portTCCRb = _BV(CS20);												// divide system clock by 1
-	portOCRL  = usCompareMatch;											// set the counter
-
-    while( ASSR & (_BV(TCN2UB)|_BV(OCR2AUB)|_BV(TCR2AUB))); // Wait until Timer2 update complete
-
-    portTIMSK |= _BV(OCIE2A);								// interrupt on Timer2 compare match
-
+	CLK.RTCCTRL |= 0x01;												// enable RTC Clock
+	RTC.INTCTRL |= (RTC_COMPINTLVL_HI_gc);								// interrupt on RTC overflow
+	while((RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
+    RTC.CNTL = 0x00;														// zero out the counter
+	RTC.CNTH = 0x00;
+	RTC.CTRL = (RTC_PRESCALER_DIV1_gc);									// divide RTC clock by 1
+	while((RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
+	RTC.PERL  = (uint8_t) usCompareMatch & 0x00ff;						// set the counter
+	RTC.PERH  = (uint8_t) (usCompareMatch >> 8) & 0x00ff;
+    
+	
 #endif
 }
 /*-----------------------------------------------------------*/
@@ -640,6 +641,12 @@ static void prvSetupTimerInterrupt( void )
 	 * count is incremented after the context is saved.
 	 */
 #if defined (__AVR_ATxmega128A1U__)
+	ISR(RTC_COMP_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(RTC_COMP_vect, ISR_NAKED)
+	{
+		vPortYieldFromTick();
+		asm volatile ( "reti" );
+	}
 #elif defined (__AVR_ATmega323__)
 	void SIG_OUTPUT_COMPARE1A( void ) __attribute__ ( ( signal, naked ) );
 	void SIG_OUTPUT_COMPARE1A( void )
@@ -655,6 +662,11 @@ static void prvSetupTimerInterrupt( void )
 	 * manual calls to taskYIELD();
 	 */
 #if defined (__AVR_ATxmega128A1U__)
+	ISR(RTC_COMP_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(RTC_COMP_vect, ISR_NAKED)
+	{
+		xTaskIncrementTick();
+	}
 #elif defined (__AVR_ATmega323__)
 	void SIG_OUTPUT_COMPARE1A( void ) __attribute__ ( ( signal ) );
 	void SIG_OUTPUT_COMPARE1A( void )

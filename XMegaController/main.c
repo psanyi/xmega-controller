@@ -34,8 +34,8 @@
  }
  int main(void)
  {
-	 xTaskCreate(TestTaskFunction1, "Task_1",1000, NULL,1,NULL);
-	 xTaskCreate(TestTaskFunction2, "Task_2",1000, NULL,1,NULL);
+	 xTaskCreate(TestTaskFunction1, "Task_1",10, NULL,1,NULL);
+	 xTaskCreate(TestTaskFunction2, "Task_2",10, NULL,1,NULL);
 	 
 	 vTaskStartScheduler();
 	 while (1)
