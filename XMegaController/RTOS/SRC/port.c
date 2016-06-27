@@ -614,14 +614,16 @@ static void prvSetupTimerInterrupt( void )
 	/* Adjust for correct value. */
 	usCompareMatch -= ( uint16_t ) 1;
 
-	portTIMSK &= ~( _BV(OCIE2B)|_BV(OCIE2A)|_BV(TOIE2) );	// disable all Timer2 interrupts
-	portTIFR |=  _BV(OCF2B)|_BV(OCF2A)|_BV(TOV2);			// clear all pending interrupts
-    ASSR = _BV(AS2);              							// set Timer/Counter2 to be asynchronous from the CPU clock
-                                  	  	  	  	  	  		// with a second external clock (32,768kHz) driving it.
-    portTCNT  = 0x00;				  						// zero out the counter
-    portTCCRa = _BV(WGM21);									// mode CTC (clear on counter match)
-	portTCCRb = _BV(CS20);									// divide system clock by 1
-	portOCRL  = usCompareMatch;								// set the counter
+	RTC.INTCTRL &= ~((RTC_COMPINTLVL_OFF_gc)|( RTC_OVFINTLVL_OFF_gc));	// disable all RTC timer interrupts
+	RTC.INTFLAGS |=  0x03;												// clear all pending interrupts
+    CLK.RTCCTRL |= (CLK_RTCSRC_RCOSC32_gc);              				// set RTC clock source
+                                  	  	  	  	  	  					// with internal clock (32,768kHz) driving it.
+    
+	while(!(RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
+    RTC.CNT = 0x00;														// zero out the counter
+	portTCCRa = _BV(WGM21);												// mode CTC (clear on counter match)
+	portTCCRb = _BV(CS20);												// divide system clock by 1
+	portOCRL  = usCompareMatch;											// set the counter
 
     while( ASSR & (_BV(TCN2UB)|_BV(OCR2AUB)|_BV(TCR2AUB))); // Wait until Timer2 update complete
 
