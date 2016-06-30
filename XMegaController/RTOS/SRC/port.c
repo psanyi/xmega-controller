@@ -563,7 +563,7 @@ void vPortYieldFromTick( void )
 	}
 	portRESTORE_CONTEXT();
 
-	asm volatile ( "ret" );
+	asm volatile ( "reti" );
 }
 /*-----------------------------------------------------------*/
 
@@ -614,22 +614,19 @@ static void prvSetupTimerInterrupt( void )
 	/* Adjust for correct value. */
 	usCompareMatch -= ( uint16_t ) 1;
 
-	RTC.INTCTRL &= ~((RTC_COMPINTLVL_OFF_gc)|( RTC_OVFINTLVL_OFF_gc));	// disable all RTC timer interrupts
-	RTC.INTFLAGS |=  0x03;												// clear all pending interrupts
-    CLK.RTCCTRL |= (CLK_RTCSRC_RCOSC32_gc);              				// set RTC clock source
-                                  	  	  	  	  	  					// with internal clock (32,768kHz) driving it.
-    
-	CLK.RTCCTRL |= 0x01;												// enable RTC Clock
-	RTC.INTCTRL |= (RTC_COMPINTLVL_HI_gc);								// interrupt on RTC overflow
-	while((RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
-    RTC.CNTL = 0x00;														// zero out the counter
-	RTC.CNTH = 0x00;
-	RTC.CTRL = (RTC_PRESCALER_DIV1_gc);									// divide RTC clock by 1
-	while((RTC.STATUS & RTC_SYNCBUSY_bm));								// check if syncbusy is cleared
-	RTC.PERL  = (uint8_t) usCompareMatch & 0x00ff;						// set the counter
-	RTC.PERH  = (uint8_t) (usCompareMatch >> 8) & 0x00ff;
-    
+	RTC.INTCTRL		&=	~(RTC_COMPINTLVL_OFF_gc| RTC_OVFINTLVL_OFF_gc);		// disable all RTC timer interrupts
+	RTC.INTFLAGS	|=  RTC_COMPIF_bm | RTC_OVFIF_bm;						// clear all pending interrupts
+    CLK.RTCCTRL		|=  CLK_RTCSRC_RCOSC32_gc;              				// set RTC clock source to internal clock (32,768kHz)
+    CLK.RTCCTRL		|=  CLK_RTCEN_bm;										// enable RTC Clock
+	RTC.CTRL		|=  RTC_PRESCALER_DIV1_gc;								// divide RTC clock by 1
+	                           	  	  	  	  	  							
+    while(RTC.STATUS & RTC_SYNCBUSY_bm);									// check if syncbusy is cleared
+    RTC.PER			= usCompareMatch;										// set clock period
+	while(RTC.STATUS & RTC_SYNCBUSY_bm);									// check if syncbusy is cleared													
+	RTC.CNT			= 0x00;													// zero out the counter		
 	
+	PMIC.CTRL		|= PMIC_HILVLEN_bm;										// enable all High level IRQ			
+	RTC.INTCTRL		|= RTC_OVFINTLVL_HI_gc;									// enable interrupt on RTC overflow
 #endif
 }
 /*-----------------------------------------------------------*/
@@ -641,8 +638,8 @@ static void prvSetupTimerInterrupt( void )
 	 * count is incremented after the context is saved.
 	 */
 #if defined (__AVR_ATxmega128A1U__)
-	ISR(RTC_COMP_vect, ISR_NAKED) __attribute__ ((hot, flatten));
-	ISR(RTC_COMP_vect, ISR_NAKED)
+	ISR(RTC_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(RTC_OVF_vect, ISR_NAKED)
 	{
 		vPortYieldFromTick();
 		asm volatile ( "reti" );
@@ -662,8 +659,8 @@ static void prvSetupTimerInterrupt( void )
 	 * manual calls to taskYIELD();
 	 */
 #if defined (__AVR_ATxmega128A1U__)
-	ISR(RTC_COMP_vect, ISR_NAKED) __attribute__ ((hot, flatten));
-	ISR(RTC_COMP_vect, ISR_NAKED)
+	ISR(RTC_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(RTC_OVF_vect, ISR_NAKED)
 	{
 		xTaskIncrementTick();
 	}
