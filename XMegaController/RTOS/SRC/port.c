@@ -88,12 +88,7 @@ Changes from V2.6.0
 
 /* Start tasks with interrupts enables. */
 #define portFLAGS_INT_ENABLED					( ( StackType_t ) 0x80 )
-
-/* Hardware constants for timer 1. */
-#define portCLEAR_COUNTER_ON_MATCH				( ( uint8_t ) 0x08 )
-#define portPRESCALE_64							( ( uint8_t ) 0x03 )
-#define portCLOCK_PRESCALER						( ( uint32_t ) 64 )
-#define portCOMPARE_MATCH_A_INTERRUPT_ENABLE	( ( uint8_t ) 0x10 )
+#define portCLOCK_PRESCALER						1024
 
 /*-----------------------------------------------------------*/
 
@@ -568,69 +563,42 @@ void vPortYieldFromTick( void )
 /*-----------------------------------------------------------*/
 
 /*
- * Setup timer 1 compare match A to generate a tick interrupt.
+ * Setup timer TCC1 to generate a tick interrupt.
+ * Timer values are calculated based on 32MHz sysclock
  */
 static void prvSetupTimerInterrupt( void )
 {
 #if defined (__AVR_ATxmega128A1U__)
-	uint16_t usCompareMatch;
-
-	/* Using 8bit Timer2 to generate the tick.  A 32.768 KHz crystal
-	 * must be attached to the appropriate pins.  We then adjust the number
-	 * to a power of two so we can get EXACT seconds for the Real Time clock.
-	 */
-
-	usCompareMatch = (uint16_t) ((uint32_t) 32768) / configTICK_RATE_HZ;
-
-	if ( usCompareMatch > 192 )
-	{
-		usCompareMatch = 256;
-	}
-	else
-	{
-		for (uint8_t i = 7; i >= 1; --i)
-		{
-			if ( usCompareMatch & ((uint16_t)1 << i) )
-			{
-				/* found the power - now let's see if we round up or down */
-				if ( usCompareMatch & ((uint16_t)1 << (i-1)) )
-				{
-					usCompareMatch = ((uint16_t)1 << (i+1));
-				}
-				else
-				{
-					usCompareMatch = ((uint16_t)1 << i);
-				}
-				break;
-			}
-		}
-	}
-
-	/* actual port tick rate in Hz, calculated */
-	portTickRateHz = (TickType_t) ((uint32_t) 32768 / usCompareMatch );
-	/* initialise first second of ticks */
-	ticksRemainingInSec = portTickRateHz;
-
-	/* Adjust for correct value. */
-	usCompareMatch -= ( uint16_t ) 1;
-
-	RTC.INTCTRL		&=	~(RTC_COMPINTLVL_OFF_gc| RTC_OVFINTLVL_OFF_gc);		// disable all RTC timer interrupts
-	RTC.INTFLAGS	|=  RTC_COMPIF_bm | RTC_OVFIF_bm;						// clear all pending interrupts
-    CLK.RTCCTRL		|=  CLK_RTCSRC_RCOSC32_gc;              				// set RTC clock source to internal clock (32,768kHz)
-    CLK.RTCCTRL		|=  CLK_RTCEN_bm;										// enable RTC Clock
-	RTC.CTRL		|=  RTC_PRESCALER_DIV1_gc;								// divide RTC clock by 1
-	                           	  	  	  	  	  							
-    while(RTC.STATUS & RTC_SYNCBUSY_bm);									// check if syncbusy is cleared
-    RTC.PER			= usCompareMatch;										// set clock period
-	while(RTC.STATUS & RTC_SYNCBUSY_bm);									// check if syncbusy is cleared													
-	RTC.CNT			= 0x00;													// zero out the counter		
+	uint32_t ulCompareMatch;
+	uint16_t uwCompareMatch;
 	
-	PMIC.CTRL		|= PMIC_HILVLEN_bm;										// enable all High level IRQ			
-	RTC.INTCTRL		|= RTC_OVFINTLVL_HI_gc;									// enable interrupt on RTC overflow
+	//tperiod = (uint8_t) ( (uint16_t) 31250 / configTICK_RATE_HZ); /* Set period */
+	
+	/* Using 16bit timer TCC1 to generate the tick.  Correct fuses must be
+	selected for the configCPU_CLOCK_HZ clock. */
+
+	ulCompareMatch = configCPU_CLOCK_HZ / configTICK_RATE_HZ;
+
+	/* We only have 16 bits so have to scale to get our required tick rate. */
+	ulCompareMatch /= portCLOCK_PRESCALER;
+	
+	/* Adjust for correct value. */
+	ulCompareMatch -= ( uint32_t ) 1;
+	
+	/* Setup compare match value for compare match A.  Interrupts are disabled 
+	before this is called so we need not worry here. */
+
+	uwCompareMatch = (uint16_t) (ulCompareMatch & (uint32_t) 0xffff);
+					 
+	TCC1.CNT = uwCompareMatch;
+	TCC1.PER = uwCompareMatch;
+	TCC1.CTRLA  =	TC2_CLKSEL_DIV1024_gc;	
+	TCC1.INTCTRLA	|= TC_OVFINTLVL_LO_gc;
+	
 #endif
 }
-/*-----------------------------------------------------------*/
 
+/*-----------------------------------------------------------*/
 #if configUSE_PREEMPTION == 1
 	/*
 	 * Tick ISR for preemptive scheduler.  We can use a naked attribute as
@@ -638,8 +606,8 @@ static void prvSetupTimerInterrupt( void )
 	 * count is incremented after the context is saved.
 	 */
 #if defined (__AVR_ATxmega128A1U__)
-	ISR(RTC_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
-	ISR(RTC_OVF_vect, ISR_NAKED)
+	ISR(TCC1_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(TCC1_OVF_vect, ISR_NAKED)
 	{
 		vPortYieldFromTick();
 		asm volatile ( "reti" );
@@ -659,8 +627,8 @@ static void prvSetupTimerInterrupt( void )
 	 * manual calls to taskYIELD();
 	 */
 #if defined (__AVR_ATxmega128A1U__)
-	ISR(RTC_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
-	ISR(RTC_OVF_vect, ISR_NAKED)
+	ISR(TCC1_OVF_vect, ISR_NAKED) __attribute__ ((hot, flatten));
+	ISR(TCC1_OVF_vect, ISR_NAKED)
 	{
 		xTaskIncrementTick();
 	}

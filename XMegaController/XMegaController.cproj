@@ -27,14 +27,14 @@
     <BootSegment>2</BootSegment>
     <eraseonlaunchrule>0</eraseonlaunchrule>
     <AsfFrameworkConfig>
-      <framework-data xmlns="">
+      <framework-data>
         <options />
         <configurations />
         <files />
         <documentation help="" />
         <offline-documentation help="" />
         <dependencies>
-          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.31.0" />
+          <content-extension eid="atmel.asf" uuidref="Atmel.ASF" version="3.34.1" />
         </dependencies>
       </framework-data>
     </AsfFrameworkConfig>
@@ -66,6 +66,8 @@
       </ToolNumber>
       <ToolName>Simulator</ToolName>
     </com_atmel_avrdbg_tool_simulator>
+    <ResetRule>0</ResetRule>
+    <EraseKey />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <ToolchainSettings>
@@ -147,6 +149,33 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="APP\SRC\LedTaskFive.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskFour.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskOne.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskSeven.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskSix.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskThree.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\LedTaskTwo.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\sequencer.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="APP\SRC\switches.c">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="main.c">
       <SubType>compile</SubType>
     </Compile>
@@ -219,11 +248,26 @@
     <Compile Include="RTOS\SRC\timers.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="UART\INCLUDE\ringBuffer.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="UART\INCLUDE\uart.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <None Include="UART\SRC\uart.c">
+      <SubType>compile</SubType>
+    </None>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="APP" />
+    <Folder Include="APP\INCLUDE" />
+    <Folder Include="APP\SRC" />
+    <Folder Include="UART" />
     <Folder Include="RTOS" />
     <Folder Include="RTOS\INCLUDE" />
     <Folder Include="RTOS\SRC" />
+    <Folder Include="UART\INCLUDE" />
+    <Folder Include="UART\SRC" />
   </ItemGroup>
   <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\Compiler.targets" />
 </Project>

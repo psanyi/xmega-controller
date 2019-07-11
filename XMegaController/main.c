@@ -11,47 +11,52 @@
  * ----------------------------------------------------------------------- */
 
  #include <avr/io.h>
+ #include <avr/interrupt.h>
+ 
  #include "FreeRTOS.h"
  #include "task.h"
  #include "croutine.h"
+ #include "semphr.h"
+ 
+ extern void createSwTask(void);
+ extern void createSequencerTask(void);
+ extern void createLedTaskOne(void);
+ extern void createLedTaskTwo(void);
+ extern void createLedTaskThree(void);
+ extern void createLedTaskFour(void);
+ extern void createLedTaskFive(void);
+ extern void createLedTaskSix(void);
+ extern void createLedTaskSeven(void);
+ 
+void sysInit(void)
+{
+	
+	/* Enable 32Mhz Internal Oscillator */
+	OSC.CTRL |= OSC_RC32MEN_bm;
+	/* Wait until the oscillator is stable */	 
+	while( (OSC.STATUS & OSC_RC32MRDY_bm) == 0);		
+	/* Set sys clock to use the 32MHz Internal Oscillator */
+	_PROTECTED_WRITE(CLK_CTRL, CLK_SCLKSEL0_bm);
+	/* Enable all interrupt levels */
+	PMIC.CTRL |= PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
+	/* Enable global interrupts */
+	sei();
+}
 
- void TestTaskFunction1(void *pvParameters)
+
+int main(void)
  {
-	 volatile uint16_t count_t1;
-	 volatile uint16_t task1_var;
-
-	 task1_var = 0;
-	 for(;;)
-	 {
-	 	for(count_t1 = 0; count_t1 < 100; ++count_t1)
-		{
-			/* delay loop */
-		}
-		task1_var++;
-	 }
-	 vTaskDelete(NULL);
- }
-
-  void TestTaskFunction2(void *pvParameters)
-  {
-	 volatile uint16_t count_t2;
-	 volatile uint16_t task2_var;
-	 task2_var = 0;
+	 sysInit();
+	 createSwTask();
+	 createSequencerTask();
+	 createLedTaskOne();
+	 createLedTaskTwo();
+	 createLedTaskThree();
+	 createLedTaskFour();
+	 createLedTaskFive();
+	 createLedTaskSix();
+	 createLedTaskSeven();
 	 
-	 for(;;)
-	 {
-		 for(count_t2 = 0; count_t2 < 100; ++count_t2)
-		 {
-			 /* delay loop */
-		 }
-		 task2_var++;
-	 }
-	 vTaskDelete(NULL);
-  }
- int main(void)
- {
-	 xTaskCreate(TestTaskFunction1, "Task_1",100, NULL,1,NULL);
-	 xTaskCreate(TestTaskFunction2, "Task_2",100, NULL,1,NULL);
 	 vTaskStartScheduler();
 	 while (1)
 	 {
